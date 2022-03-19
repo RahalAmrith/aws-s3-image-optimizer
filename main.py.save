@@ -1,0 +1,80 @@
+import io
+
+import boto3
+import requests
+from PIL import Image
+
+import logging
+import time
+import threading
+import traceback
+
+import PIL
+import os
+import glob
+
+# configure S3 Bucket
+s3 = boto3.resource('s3')
+
+# Logging Config
+log_file_name = time.strftime("%m%d%Y-%H:%M:%S", time.localtime())
+logging.basicConfig(
+    level=logging.INFO,
+    filename=f"logs/image_convert_log_{log_file_name}.log",
+    filemode="w",
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
+
+
+def optimizeImage(uri):
+    logging.info(f'Frtching : {uri} ')
+    img.save(imgData, 'webp', optimize=True, quality=30)
+    imgData.seek(0)
+
+    # save to local file
+    # img.save('test.webp', 'webp', optimize=True, quality=70)
+
+    newkey = ""
+
+    if str(uri).endswith(".png") :
+        newkey = uri.replace('.png', '.webp')
+
+    if str(uri).endswith(".jpg"):
+        newkey = uri.replace('.jpg', '.webp')
+
+    if str(uri).endswith(".jpeg"):
+        newkey = uri.replace('.jpeg', '.webp')
+
+    print(f'Uploading : {newkey}')
+
+    s3.Bucket('cog-prod').put_object(Key=newkey, Body=imgData, ContentType='image/webp')
+    logging.info(f'Uploaded : {newkey} ')
+    print(f'Uploaded : {newkey} ')
+
+
+count = 0
+uriList = []
+no_of_threads = 15
+
+for obj in s3.Bucket('cog-prod').objects.all():
+    if str(obj.key).endswith(".png") or str(obj.key).endswith(".jpg") or str(obj.key).endswith(".jpeg"):
+        count += 1
+        uriList.append(obj.key)
+
+print(f'Object countcount : {count}')
+logging.info(f'{count} images loaded')
+
+try:
+    for uri in uriList:
+        while len(threading.enumerate()) > no_of_threads:
+            pass
+        thread1 = threading.Thread(
+            target=optimizeImage,
+            kwargs={"uri": uri}
+        )
+        thread1.start()
+        time.sleep(1)
+except Exception as e:
+    print(traceback.print_exc())
+
+# optimizeImage('items/60/20180719120615/item_image_1_original.jpg')
